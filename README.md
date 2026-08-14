@@ -48,7 +48,7 @@
 **方式一：Git 地址（无需发布到 npm）**
 
 ```sh
-dsh plugin --profile web add https://github.com/lv2104799141/dsh-balance-tide
+dsh plugin --profile web add https://github.com/huanyuLv/dsh-balance-tide
 ```
 
 **方式二：本地目录**
