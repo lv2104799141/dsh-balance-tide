@@ -396,24 +396,28 @@ export function apply(ctx, config) {
       }
       return { ...base, error: cache.error ?? 'unknown' }
     }
-    webCtx.effect(() => webCtx.webServer.register({
-      kind: 'exact',
-      path: '/query-tide',
-      handler(req, res) {
-        if (req.method !== 'GET' && req.method !== 'HEAD') {
-          res.writeHead(405, { Allow: 'GET, HEAD' })
-          res.end()
-          return
-        }
-        const body = JSON.stringify(serialize())
-        res.writeHead(200, {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Cache-Control': 'no-store',
-          'Content-Length': Buffer.byteLength(body),
-        })
-        res.end(req.method === 'HEAD' ? undefined : body)
-      },
-    }), 'dsh-balance-tide: route')
+    const handler = (req, res) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405, { Allow: 'GET, HEAD' })
+        res.end()
+        return
+      }
+      const body = JSON.stringify(serialize())
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Content-Length': Buffer.byteLength(body),
+      })
+      res.end(req.method === 'HEAD' ? undefined : body)
+    }
+    webCtx.effect(() => {
+      // /query-tide 为本插件正式路由; /query-balance 为兼容别名,
+      // 供仍运行旧 dsh-balance 客户端 bundle 的未刷新页面读取,
+      // 避免旧页面对缺失路由收到 HTML 回退后 JSON 解析报错。
+      for (const path of ['/query-tide', '/query-balance']) {
+        webCtx.webServer.register({ kind: 'exact', path, handler })
+      }
+    }, 'dsh-balance-tide: routes')
   })
 
   // 可选 sessionProjections: 会话花费投影。
