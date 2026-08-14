@@ -1,0 +1,15 @@
+# dsh-balance-tide bundle 层: 一个插件行。
+# 安装: dsh plugin --profile web add file:/path/to/dsh-balance-tide
+# 覆盖配置示例(写进 $DSH_HOME/profiles/web/cordis.patch.yml):
+#   - id: dsh-balance-tide
+#     config:
+#       refreshIntervalMs: 120000      # 服务器向 DeepSeek 查询余额的频率(毫秒)
+#       clientPollIntervalMs: 15000    # 浏览器刷新显示的频率(毫秒)
+- insert:
+    - id: dsh-balance-tide
+      name: dsh-balance-tide
+      config:
+        refreshIntervalMs: 300000
+        clientPollIntervalMs: 30000
+        timeoutMs: 8000
+        currency: CNY
