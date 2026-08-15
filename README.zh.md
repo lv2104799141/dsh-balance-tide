@@ -4,7 +4,7 @@
 
 [![dsh-plugin](https://img.shields.io/badge/dsh--plugin-DeepSeek%20Harness-blue)](https://github.com/topics/dsh-plugin)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.1.3-4176E6)](package.json)
+[![version](https://img.shields.io/badge/version-0.1.4-4176E6)](package.json)
 
 **DeepSeek Harness（DSH）Web 插件：余额 + 峰谷计价潮汐提示。**
 
@@ -47,7 +47,13 @@
 
 ## 安装
 
-**方式一：Git 地址（无需发布到 npm）**
+**方式一：npm（推荐）**
+
+```sh
+dsh plugin --profile web add dsh-balance-tide
+```
+
+**方式二：Git 地址**
 
 ```sh
 dsh plugin --profile web add https://github.com/huanyuLv/dsh-balance-tide
