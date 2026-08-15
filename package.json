@@ -43,7 +43,26 @@
     "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6"
   },
   "peerDependenciesMeta": {
-    "@deepseek-ai/cordis": { "optional": true },
-    "@deepseek-ai/dsh-credentials": { "optional": true }
-  }
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-credentials": {
+      "optional": true
+    }
+  },
+  "author": "Lv Huan Yu",
+  "homepage": "https://github.com/huanyuLv/dsh-balance-tide#readme",
+  "bugs": {
+    "url": "https://github.com/huanyuLv/dsh-balance-tide/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "balance",
+    "pricing",
+    "peak-off-peak",
+    "cost"
+  ]
 }
