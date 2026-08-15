@@ -80,6 +80,20 @@ window.__ModuleLoader__.load({
 			if (m > 0) return t("dur.minutes", { m });
 			return t("dur.seconds", { s: Math.max(totalSec, 0) });
 		}
+		/** 服务端下发的错误码集合(有限枚举, 不再透传原始异常文本)。 */
+		const ERROR_CODES = new Set([
+			"api-key-missing", "bad-base-url", "timeout", "network-error",
+			"http-401", "http-402", "http-403", "http-429", "http-error",
+			"forbidden", "unknown"
+		]);
+		/** 三种访问控制拒绝原因对用户是同一件事, 统一成一句人话。 */
+		const ACCESS_CODES = new Set(["missing-host", "host-not-allowed", "origin-not-allowed"]);
+		/** 错误码 → 本地化文案; 未知码原样显示, 便于排查。 */
+		function errorLabel(code, t) {
+			if (typeof code !== "string" || code === "") return t("err.unknown");
+			if (ACCESS_CODES.has(code)) return t("err.forbidden");
+			return ERROR_CODES.has(code) ? t("err." + code) : code;
+		}
 		/** 官方定价页。 */
 		const PRICING_URL = "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/";
 		//#endregion
@@ -103,9 +117,15 @@ window.__ModuleLoader__.load({
 				try {
 					const res = await fetch("/query-tide", {
 						cache: "no-store",
+						credentials: "same-origin",
 						headers: { accept: "application/json" }
 					});
-					if (!res.ok) throw new Error("HTTP " + res.status);
+					if (!res.ok) {
+						// 403 来自服务端的同源 / Host 校验, 值得单独提示而非笼统的 HTTP 错误。
+						throw Object.assign(new Error("HTTP " + res.status), {
+							code: res.status === 403 ? "forbidden" : "http-error"
+						});
+					}
 					const data = await res.json();
 					if (typeof data.clientPollIntervalMs === "number" && data.clientPollIntervalMs >= 5000) {
 						pollMs = Math.min(data.clientPollIntervalMs, 3600000);
@@ -114,7 +134,7 @@ window.__ModuleLoader__.load({
 				} catch (error) {
 					snapshot = {
 						status: "error",
-						message: error instanceof Error ? error.message : String(error),
+						code: error?.code ?? "network-error",
 						at: Date.now()
 					};
 				}
@@ -183,7 +203,20 @@ window.__ModuleLoader__.load({
 			"tip.statusUnavailable": "不足",
 			"tip.cost": "本会话消耗(估算, 按当前时段计价): {amount}\n{models}\n输入 {input} tok · 输出 {output} tok",
 			"tip.costModel": "{model}: {amount}",
+			"tip.billingNote": "估算值仅供参考, 实际扣费以官方账单为准",
+			"tip.balanceOther": "其他币种: {list}",
 			"tip.error": "获取失败: {error}",
+			"err.api-key-missing": "未配置 API Key",
+			"err.bad-base-url": "baseUrl 配置无效(必须为 https)",
+			"err.timeout": "请求超时",
+			"err.network-error": "网络错误",
+			"err.http-401": "API Key 无效 (401)",
+			"err.http-402": "账户余额不足 (402)",
+			"err.http-403": "无访问权限 (403)",
+			"err.http-429": "请求过于频繁 (429)",
+			"err.http-error": "接口返回错误",
+			"err.forbidden": "读取被拒绝: 来源跨源, 或 Host 不在 allowedHosts 中",
+			"err.unknown": "未知错误",
 			"tip.gap": "峰谷差距: 高峰价 = 低谷价 × 2(现行价不参与峰谷)",
 			"tip.advice": "💡 高峰时段价格为低谷的 2 倍, 请合理安排使用时间",
 			"pricing.aria": "查看 DeepSeek 官方定价策略",
@@ -220,7 +253,20 @@ window.__ModuleLoader__.load({
 			"tip.statusUnavailable": "insufficient",
 			"tip.cost": "This session (est., current period): {amount}\n{models}\nInput {input} tok · Output {output} tok",
 			"tip.costModel": "{model}: {amount}",
+			"tip.billingNote": "Estimate only — the official invoice is authoritative",
+			"tip.balanceOther": "Other currencies: {list}",
 			"tip.error": "Fetch failed: {error}",
+			"err.api-key-missing": "API key not configured",
+			"err.bad-base-url": "Invalid baseUrl (https required)",
+			"err.timeout": "Request timed out",
+			"err.network-error": "Network error",
+			"err.http-401": "Invalid API key (401)",
+			"err.http-402": "Insufficient balance (402)",
+			"err.http-403": "Access denied (403)",
+			"err.http-429": "Rate limited (429)",
+			"err.http-error": "API returned an error",
+			"err.forbidden": "Read refused: cross-origin, or Host not in allowedHosts",
+			"err.unknown": "Unknown error",
 			"tip.gap": "Peak/off-peak gap: peak = off-peak × 2 (legacy pricing not affected)",
 			"tip.advice": "💡 Peak hours cost 2× off-peak — plan your usage accordingly",
 			"pricing.aria": "View the official DeepSeek pricing",
@@ -330,17 +376,27 @@ window.__ModuleLoader__.load({
 						status,
 						time: formatClock(info.fetchedAt)
 					}));
+					// 多币种账户: 主行只放首个, 其余进悬停明细, 避免整行被撑爆。
+					if (info.balances.length > 1) {
+						const others = info.balances.slice(1)
+							.map((b) => formatMoney(b.total, b.currency))
+							.join(" · ");
+						tooltipLines.push(t("tip.balanceOther", { list: others }));
+					}
 					if (info.stale === true && typeof info.error === "string") {
-						tooltipLines.push(t("tip.error", { error: info.error }));
+						tooltipLines.push(t("tip.error", { error: errorLabel(info.error, t) }));
 					}
 				} else {
 					const message = info.error === "api-key-missing" ? t("balanceMissing") : t("balanceError");
 					groups.push(react.createElement("span", { className: "dshbt_error", key: "bal" }, message));
-					if (typeof info.error === "string") tooltipLines.push(t("tip.error", { error: info.error }));
+					if (typeof info.error === "string") {
+						tooltipLines.push(t("tip.error", { error: errorLabel(info.error, t) }));
+					}
 				}
 			} else if (snap.status === "error") {
-				groups.push(react.createElement("span", { className: "dshbt_error", key: "bal" }, t("balanceError")));
-				tooltipLines.push(t("tip.error", { error: snap.message }));
+				const message = snap.code === "api-key-missing" ? t("balanceMissing") : t("balanceError");
+				groups.push(react.createElement("span", { className: "dshbt_error", key: "bal" }, message));
+				tooltipLines.push(t("tip.error", { error: errorLabel(snap.code, t) }));
 			}
 
 			// —— 本会话花费段 ——
@@ -359,6 +415,7 @@ window.__ModuleLoader__.load({
 					input: formatTokens(cost.tokens.uncachedInput + cost.tokens.cacheRead + cost.tokens.cacheWrite),
 					output: formatTokens(cost.tokens.output)
 				}));
+				tooltipLines.push(t("tip.billingNote"));
 			}
 
 			// —— "?" 图标: 点击打开官方定价页 ——
@@ -418,9 +475,11 @@ window.__ModuleLoader__.load({
 				};
 			});
 			// 页面回到前台时立即刷新一次, 并在隐藏期间跳过定时器。
+			// 必须先确认 store 已有订阅者(started): 否则这里会拉起一条没人消费、
+			// 也永远不会被 unsubscribe 停掉的轮询循环, 架空 store 的按需启停。
 			ctx.effect(() => {
 				const onVisibility = () => {
-					if (!document.hidden) refresh().then(schedule, schedule);
+					if (!document.hidden && started) refresh().then(schedule, schedule);
 				};
 				document.addEventListener("visibilitychange", onVisibility);
 				return () => document.removeEventListener("visibilitychange", onVisibility);

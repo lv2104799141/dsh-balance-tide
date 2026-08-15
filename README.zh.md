@@ -4,7 +4,7 @@
 
 [![dsh-plugin](https://img.shields.io/badge/dsh--plugin-DeepSeek%20Harness-blue)](https://github.com/topics/dsh-plugin)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.1.4-4176E6)](package.json)
+[![version](https://img.shields.io/badge/version-0.2.0-4176E6)](package.json)
 
 **DeepSeek Harness（DSH）Web 插件：余额 + 峰谷计价潮汐提示。**
 
@@ -34,7 +34,7 @@
 
 ## 峰谷计价规则（北京时间）
 
-依据官方定价页（2026-08 版）：
+依据官方定价页（2026-08 版，最后核对于 2026-08-15）：
 
 - **2026-08-17 00:00 起**采用峰谷定价；此前为现行统一价
 - **高峰时段**：09:00–12:00、14:00–18:00；其余为低谷（空闲）时段
@@ -59,7 +59,7 @@ dsh plugin --profile web add dsh-balance-tide
 dsh plugin --profile web add https://github.com/huanyuLv/dsh-balance-tide
 ```
 
-**方式二：本地目录**
+**方式三：本地目录**
 
 ```sh
 dsh plugin --profile web add file:/path/to/dsh-balance-tide
@@ -75,10 +75,56 @@ dsh plugin --profile web add file:/path/to/dsh-balance-tide
     refreshIntervalMs: 300000   # 服务器拉取余额频率
     clientPollIntervalMs: 30000 # 浏览器轮询频率
     currency: CNY
+    allowedHosts: []            # 经域名反代访问时，在此登记该域名
+```
+
+官方调价或调整时段时，无需等插件发版，直接覆盖对应配置即可：
+
+```yaml
+- id: dsh-balance-tide
+  config:
+    tideCutoff: '2026-08-17T00:00:00+08:00'   # 峰谷定价生效时刻
+    peakWindows:                              # 高峰时段（北京时间整点，左闭右开）
+      - { start: 9, end: 12 }
+      - { start: 14, end: 18 }
+    tidePrices:                               # 各档位单价（每 1M token）
+      flat:
+        deepseek-v4-flash: { cacheHit: 0.02, cacheMiss: 1, output: 2 }
+      peak:
+        deepseek-v4-flash: { cacheHit: 0.1, cacheMiss: 3, output: 9 }
+      offpeak:
+        deepseek-v4-flash: { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 }
+```
+
+`peakWindows: []` 表示不存在高峰时段（官方日后取消峰谷定价时可这样配）。
+
+## 安全
+
+- **密钥**：优先走 DSH credentials 的 `DEEPSEEK_API_KEY`。配置项 `apiKey` 仅作应急，
+  它会以明文落在配置文件里，**不建议填写**。`baseUrl` 必须是 https，明文 http 会被拒绝
+  （否则密钥会暴露在链路上）。
+- **余额端点**：`/query-tide` 会返回账户余额，因此对读取方做了校验——Host 必须是
+  localhost、IP 字面量或 `allowedHosts` 中登记的域名（阻断 DNS rebinding）；带 Origin 的
+  请求必须同源（阻断任意网页读取你的余额）。被拒时返回 403。
+- **错误信息**：服务端只向浏览器下发有限的错误码，原始异常文本仅写入日志，避免自定义
+  `baseUrl` 的完整地址回流到前端。
+
+## 已知限制
+
+- 花费为**估算值**，按当前时段单价折算，实际扣费以官方账单为准。
+- 多币种账户的主行只显示第一种货币，其余在悬停明细中列出。
+- `deepseek-chat` / `deepseek-reasoner` 已不在官方定价页公示，`prices` 中的静态价仅作回退。
+
+## 开发
+
+```sh
+npm install
+npm test
 ```
 
 ## 兼容性
 
 - DeepSeek Harness `0.1.0-rc.6`+（web profile）
+- Node.js 20 / 22 / 24（CI 覆盖）
 - 跨平台：纯 JavaScript + 标准浏览器 CSS，无原生模块（macOS 已验证；Windows/Linux 设计兼容）
 - 许可证：MIT
