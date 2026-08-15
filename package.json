@@ -64,5 +64,9 @@
     "pricing",
     "peak-off-peak",
     "cost"
-  ]
+  ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  }
 }
