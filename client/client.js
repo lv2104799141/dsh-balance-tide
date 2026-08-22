@@ -2,16 +2,18 @@
  * dsh-balance-tide — browser half (lazy-CJS 客户端 bundle)。
  *
  * 在 `conversation.composer.dock` 注册一枚读数:
- *   [峰价/谷价/现行价 徽章] [距切换倒计时] | 余额 ¥xx.xx | 本会话约 ¥x.xx | 今日约 ¥x.xx | ?
+ *   [峰价/谷价/现行价 徽章] [距切换倒计时] | 余额 ¥xx.xx | 本会话约 ¥x.xx | ?
  *
  * - 余额与潮汐: 单例轮询器按服务器下发的 `clientPollIntervalMs` 读取 `/query-tide`
  *   (只读缓存, 不直接访问 DeepSeek); 页面隐藏时暂停轮询。
  * - 倒计时: 组件内每秒本地计时, 基于服务端下发的下一切换时刻。
  * - 本会话消耗: 读取宿主推送的 `queryTideCost` 投影(按当前时段计价)。
- * - 今日消耗: 纯客户端估算, 按北京日在 `localStorage` 累计本会话消耗的增量;
- *   跨天自动清零, 仅反映本浏览器/本机看到过的会话, 不是账户维度的官方账单。
  * - 悬停: 当前/切换后各档单价、余额构成、会话消耗、高峰窗口与使用建议;
  *   "?" 图标点击打开官方定价页。
+ *
+ * (曾有一枚纯客户端估算的"今日约"读数, 按北京日在 localStorage 累计会话花费增量;
+ * 多标签页同时打开时对同一 localStorage key 读改写会互相踩踏导致重复计数, 且无法
+ * 回溯纠正已经写脏的历史累计值, 已移除。今日花费请以官方账单/CSV 为准。)
  */
 window.__ModuleLoader__.load({
 	id: "dsh-balance-tide",
@@ -179,41 +181,6 @@ window.__ModuleLoader__.load({
 		};
 		//#endregion
 
-		//#region today ledger (本日消耗估算: 按北京日在 localStorage 累计, 仅增量, 跨天重置)
-		const TODAY_KEY = "dsh-balance-tide/todayCost.v1";
-		function beijingDayStamp(now) {
-			if (!(now instanceof Date) || Number.isNaN(now.getTime())) now = new Date();
-			const bj = new Date(now.getTime() + (8 * 60 + now.getTimezoneOffset()) * 60000);
-			return bj.toISOString().slice(0, 10);
-		}
-		function readTodayLedger() {
-			try {
-				const raw = localStorage.getItem(TODAY_KEY);
-				if (raw === null) return { date: "", total: 0, lastSessionCost: 0 };
-				const parsed = JSON.parse(raw);
-				return {
-					date: typeof parsed.date === "string" ? parsed.date : "",
-					total: typeof parsed.total === "number" ? parsed.total : 0,
-					lastSessionCost: typeof parsed.lastSessionCost === "number" ? parsed.lastSessionCost : 0
-				};
-			} catch {
-				return { date: "", total: 0, lastSessionCost: 0 };
-			}
-		}
-		/** 把会话花费的“新增量”并入今日账本; 换会话/换天都不会重复计数或丢量。 */
-		function accumulateTodayCost(sessionCost, now) {
-			if (!(now instanceof Date) || Number.isNaN(now.getTime())) now = new Date();
-			const date = beijingDayStamp(now);
-			const ledger = readTodayLedger();
-			const next = ledger.date === date ? { ...ledger } : { date, total: 0, lastSessionCost: 0 };
-			const delta = Math.max(0, sessionCost - next.lastSessionCost);
-			next.total += delta;
-			next.lastSessionCost = sessionCost;
-			try { localStorage.setItem(TODAY_KEY, JSON.stringify(next)); } catch { /* 存储不可用则仅本次会话内有效 */ }
-			return next.total;
-		}
-		//#endregion
-
 		//#region locale
 		const NS = "queryTide";
 		const zh = {
@@ -230,7 +197,6 @@ window.__ModuleLoader__.load({
 			"balanceError": "余额不可用",
 			"balanceMissing": "未配置 API Key",
 			"sessionCost": "本会话约 {amount}",
-			"todayCost": "今日约 {amount}",
 			"tip.tide": "当前时段: {label} · {countdown}\n高峰窗口: {windows}(北京时间)",
 			"tip.flatNote": "峰谷定价将于 2026-08-17 00:00(北京时间)生效, 空闲时段价格为高峰的一半",
 			"tip.currentPrices": "当前价(每 1M token · {currency}):\n{models}",
@@ -281,7 +247,6 @@ window.__ModuleLoader__.load({
 			"balanceError": "Balance unavailable",
 			"balanceMissing": "API key not configured",
 			"sessionCost": "~{amount} this session",
-			"todayCost": "~{amount} today",
 			"tip.tide": "Now: {label} · {countdown}\nPeak windows: {windows} (Beijing time)",
 			"tip.flatNote": "Peak/off-peak pricing takes effect 2026-08-17 00:00 (Beijing), off-peak is half of peak",
 			"tip.currentPrices": "Current prices (per 1M tokens · {currency}):\n{models}",
@@ -356,19 +321,11 @@ window.__ModuleLoader__.load({
 					sessTokens = { uncachedInput: usage.uncachedInputTokens ?? 0, cacheRead: usage.cacheReadTokens ?? 0, cacheWrite: usage.cacheWriteTokens ?? 0, output: usage.outputTokens ?? 0 };
 				}
 			}
-			const costAmount = sessCost;
-			const [todayCost, setTodayCost] = react.useState(0);
-
 			// 每秒 tick 一次, 驱动倒计时刷新。
 			react.useEffect(() => {
 				const id = setInterval(() => setTick((x) => x + 1), 1000);
 				return () => clearInterval(id);
 			}, []);
-
-			// 本日消耗估算: 会话成本变化时, 把增量并入北京日的 localStorage 累计。
-			react.useEffect(() => {
-				setTodayCost(accumulateTodayCost(costAmount));
-			}, [costAmount]);
 
 			const groups = [];
 			const tooltipLines = [];
@@ -485,11 +442,6 @@ window.__ModuleLoader__.load({
 					output: formatTokens(tks.output ?? 0)
 				}));
 				tooltipLines.push(t("tip.billingNote"));
-			}
-
-			// —— 今日累计 —— (纯客户端估算, 独立于当前会话投影: 今日总额可能来自此前会话)
-			if (todayCost > 0) {
-				groups.push(react.createElement("span", { key: "today" }, t("todayCost", { amount: formatMoney(todayCost, cost?.currency ?? "CNY") })));
 			}
 
 			// —— "?" 图标: 点击打开官方定价页 ——

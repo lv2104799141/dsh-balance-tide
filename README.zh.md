@@ -4,21 +4,21 @@
 
 [![dsh-plugin](https://img.shields.io/badge/dsh--plugin-DeepSeek%20Harness-blue)](https://github.com/topics/dsh-plugin)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.3.0-4176E6)](package.json)
+[![version](https://img.shields.io/badge/version-0.4.0-4176E6)](package.json)
 
 **DeepSeek Harness（DSH）Web 插件：余额 + 峰谷计价潮汐提示。**
 
 在输入框下方显示一行实时读数：
 
 ```
-[现行价] 峰谷计价 2天5时 后生效 | 余额 ¥28.78 | 本会话约 ¥0.42 | 今日约 ¥5.60 | ?
+[现行价] 峰谷计价 2天5时 后生效 | 余额 ¥28.78 | 本会话约 ¥0.42 | ?
 ```
 
 8 月 17 日峰谷定价生效后，徽章与倒计时随北京时间实时切换：
 
 ```
-[谷价] 距高峰 2时15分 | 余额 ¥28.78 | 本会话约 ¥0.42 | 今日约 ¥5.60 | ?        ← 空闲时段
-[峰价] 距低谷 1时30分 | 余额 ¥28.78 | 本会话约 ¥0.42 | 今日约 ¥5.60 | ?        ← 高峰时段
+[谷价] 距高峰 2时15分 | 余额 ¥28.78 | 本会话约 ¥0.42 | ?        ← 空闲时段
+[峰价] 距低谷 1时30分 | 余额 ¥28.78 | 本会话约 ¥0.42 | ?        ← 高峰时段
 ```
 
 ## 功能
@@ -27,7 +27,6 @@
 - **倒计时**：距下一次档位切换的剩余时间，每秒刷新，提前规划使用时间
 - **余额**：官方 `/user/balance` 实时余额（赠送/充值拆分）
 - **本会话消耗**：按当前时段单价估算（复用 `sessionProjections` 折叠，同 turn/step 样本替换不重复计数）
-- **今日消耗**：纯客户端估算，按北京日在 `localStorage` 累计本会话消耗的增量，跨天自动清零；仅反映本浏览器看到过的会话，不是账户维度的官方账单
 - **悬停明细**：当前价与切换后价格的完整单价表、峰谷差距（高峰 = 低谷 × 2）、高峰窗口与使用建议
 - **`?` 图标**：直达官方定价页 <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/>
 - **零配置**：复用 DSH credentials 中的 `DEEPSEEK_API_KEY`，无需再填密钥，代码仓库中不含任何密钥

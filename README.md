@@ -4,22 +4,22 @@
 
 [![dsh-plugin](https://img.shields.io/badge/dsh--plugin-DeepSeek%20Harness-blue)](https://github.com/topics/dsh-plugin)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.3.0-4176E6)](package.json)
+[![version](https://img.shields.io/badge/version-0.4.0-4176E6)](package.json)
 
 **DeepSeek Harness (DSH) Web plugin: account balance + peak/off-peak pricing tide indicator.**
 
 A live readout row under the composer:
 
 ```
-[standard] peak pricing starts in 2d 5h | Balance ¥28.78 | ~¥0.42 this session | ~¥5.60 today | ?
+[standard] peak pricing starts in 2d 5h | Balance ¥28.78 | ~¥0.42 this session | ?
 ```
 
 Once peak/off-peak pricing takes effect (2026-08-17), the badge and countdown
 follow Beijing time in real time:
 
 ```
-[off-peak] peak in 2h 15m | Balance ¥28.78 | ~¥0.42 this session | ~¥5.60 today | ?   ← off-peak hours
-[peak] off-peak in 1h 30m | Balance ¥28.78 | ~¥0.42 this session | ~¥5.60 today | ?   ← peak hours
+[off-peak] peak in 2h 15m | Balance ¥28.78 | ~¥0.42 this session | ?   ← off-peak hours
+[peak] off-peak in 1h 30m | Balance ¥28.78 | ~¥0.42 this session | ?   ← peak hours
 ```
 
 ## Features
@@ -28,7 +28,6 @@ follow Beijing time in real time:
 - **Countdown**: time remaining until the next pricing switch, ticking every second — plan your usage ahead
 - **Balance**: live balance from the official `/user/balance` endpoint (granted / topped-up split)
 - **Session cost**: estimated at current-period prices (reuses `sessionProjections`; same-turn/step samples replace rather than double-count)
-- **Today's cost**: client-side only estimate, accumulating the session-cost delta per Beijing day in `localStorage`, resetting automatically at day boundary; reflects only sessions this browser has seen, not an official account-wide invoice
 - **Hover details**: full price tables for the current and the next period, the peak/off-peak gap (peak = off-peak × 2), peak windows, and usage advice
 - **`?` icon**: opens the official pricing page <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/>
 - **Zero config**: reuses `DEEPSEEK_API_KEY` from DSH credentials — no key in the repo, ever
