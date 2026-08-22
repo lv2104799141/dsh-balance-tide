@@ -16,13 +16,13 @@ const usage = (input, output, cacheRead = 0, cacheWrite = 0) => ({
   inputTokens: input, outputTokens: output, cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite,
 })
 
-/** 折叠一串事件并返回通过 schema 校验后的视图。 */
+/** 折叠一串事件并返回通过 wire.viewSchema 校验后的视图(宿主约定)。 */
 const run = (events, projection = makeCostProjection(config)) => {
   let state = projection.init()
   for (const event of events) state = projection.apply(state, event)
-  const view = projection.view(state)
+  const view = projection.wire.view(state)
   // 校验失败会抛, 等同于宿主侧的行为。
-  return projection.schema.parse(view)
+  return projection.wire.viewSchema.parse(view)
 }
 
 test('按 flat 价折算单模型花费', () => {

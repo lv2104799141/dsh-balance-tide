@@ -332,10 +332,31 @@ window.__ModuleLoader__.load({
 		 */
 		const TideReadout = react.memo(function TideReadout({ useProjection, t }) {
 			const cost = useProjection("queryTideCost");
+			const usage = useProjection("tokenUsage");
 			const snap = react.useSyncExternalStore(tideStore.subscribe, tideStore.getSnapshot, tideStore.getSnapshot);
 			const [pricingHover, setPricingHover] = react.useState(false);
 			const [, setTick] = react.useState(0);
-			const costAmount = cost?.cost ?? 0;
+			// 有效会话成本: 优先服务端 queryTideCost; 若为 0/缺失, 用可靠的 tokenUsage + 当前单价兜底重算。
+			let sessCost = 0;
+			let sessTokens = null;
+			if (cost !== undefined && cost.cost > 0) {
+				sessCost = cost.cost;
+				sessTokens = cost.tokens;
+			} else if (usage !== undefined) {
+				const inp = (usage.uncachedInputTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
+				const hit = usage.cacheReadTokens ?? 0;
+				const out = usage.outputTokens ?? 0;
+				if (inp + hit + out > 0) {
+					const tideObj = snap.payload?.tide;
+					const prices = (tideObj && typeof tideObj === "object") ? (tideObj.currentPrices ?? {}) : {};
+					const def = snap.payload?.defaultPrices ?? { cacheHit: 0.1, cacheMiss: 1, output: 2 };
+					const model = (cost?.models ?? []).find((m) => (cost?.costByModel?.[m] ?? 0) > 0) ?? (cost?.models ?? [])[0];
+					const p = (model && prices[model]) || def;
+					sessCost = ((inp * p.cacheMiss) + (hit * p.cacheHit) + (out * p.output)) / 1e6;
+					sessTokens = { uncachedInput: usage.uncachedInputTokens ?? 0, cacheRead: usage.cacheReadTokens ?? 0, cacheWrite: usage.cacheWriteTokens ?? 0, output: usage.outputTokens ?? 0 };
+				}
+			}
+			const costAmount = sessCost;
 			const [todayCost, setTodayCost] = react.useState(0);
 
 			// 每秒 tick 一次, 驱动倒计时刷新。
@@ -446,20 +467,22 @@ window.__ModuleLoader__.load({
 			}
 
 			// —— 本会话花费段 ——
-			if (cost !== undefined && cost.cost > 0) {
-				const amount = formatMoney(cost.cost, cost.currency ?? "CNY");
+			if (sessCost > 0) {
+				const ccy = cost?.currency ?? "CNY";
+				const amount = formatMoney(sessCost, ccy);
 				groups.push(react.createElement("span", { key: "cost" }, t("sessionCost", { amount })));
-				const modelLines = (cost.models ?? [])
-					.filter((model) => (cost.costByModel[model] ?? 0) > 0)
+				const tks = sessTokens ?? { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+				const modelLines = (cost?.models ?? [])
+					.filter((model) => (cost?.costByModel?.[model] ?? 0) > 0)
 					.map((model) => t("tip.costModel", {
 						model: model === "unknown" ? t("model.unknown") : model,
-						amount: formatMoney(cost.costByModel[model], cost.currency ?? "CNY")
+						amount: formatMoney(cost.costByModel[model], ccy)
 					}));
 				tooltipLines.push(t("tip.cost", {
 					amount,
 					models: modelLines.length > 0 ? modelLines.join("\n") : "",
-					input: formatTokens(cost.tokens.uncachedInput + cost.tokens.cacheRead + cost.tokens.cacheWrite),
-					output: formatTokens(cost.tokens.output)
+					input: formatTokens((tks.uncachedInput ?? 0) + (tks.cacheRead ?? 0) + (tks.cacheWrite ?? 0)),
+					output: formatTokens(tks.output ?? 0)
 				}));
 				tooltipLines.push(t("tip.billingNote"));
 			}

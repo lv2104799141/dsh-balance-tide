@@ -45,16 +45,19 @@ export const TIDE_PRICES = {
   flat: {
     'deepseek-v4-flash': { cacheHit: 0.02, cacheMiss: 1, output: 2 },
     'deepseek-v4-pro': { cacheHit: 0.025, cacheMiss: 3, output: 6 },
+    'deepseek-v4-flash-vision-exp': { cacheHit: 0.02, cacheMiss: 1, output: 2 },
   },
   /** 低谷价(高峰的半价) */
   offpeak: {
     'deepseek-v4-flash': { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 },
     'deepseek-v4-pro': { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 },
+    'deepseek-v4-flash-vision-exp': { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 },
   },
   /** 高峰价 */
   peak: {
     'deepseek-v4-flash': { cacheHit: 0.1, cacheMiss: 3, output: 9 },
     'deepseek-v4-pro': { cacheHit: 0.3, cacheMiss: 9, output: 27 },
+    'deepseek-v4-flash-vision-exp': { cacheHit: 0.1, cacheMiss: 3, output: 9 },
   },
 }
 
@@ -260,22 +263,47 @@ export const makeCostProjection = (config) => {
   const round6 = (n) => Math.round(n * 1e6) / 1e6
   /** byModel 用 null 原型, 使 `toString` 等模型名不再穿透到 Object.prototype。 */
   const emptyByModel = () => Object.create(null)
+  /** 会话折叠状态的 schema(用于持久化恢复: 宿主以 stateSchema.parse 校验缓存行)。 */
+  const stateSchema = z.object({
+    currentModel: z.string().nullable(),
+    last: z.object({
+      turn: z.number(),
+      step: z.number(),
+      model: z.string(),
+      buckets: z.object({
+        uncachedInputTokens: z.number(),
+        cacheReadTokens: z.number(),
+        cacheWriteTokens: z.number(),
+        outputTokens: z.number(),
+      }),
+    }).nullable(),
+    byModel: z.record(z.string(), z.object({
+      uncachedInputTokens: z.number(),
+      cacheReadTokens: z.number(),
+      cacheWriteTokens: z.number(),
+      outputTokens: z.number(),
+    })),
+    modelOrder: z.array(z.string()),
+  })
+  /** 推给客户端的 view 输出 schema(宿主要求 wire.viewSchema)。 */
+  const viewSchema = z.object({
+    models: z.array(z.string()),
+    cost: z.number().nonnegative(),
+    costByModel: z.record(z.string(), z.number().nonnegative()),
+    tokens: z.object({
+      uncachedInput: z.number().int().nonnegative(),
+      cacheRead: z.number().int().nonnegative(),
+      cacheWrite: z.number().int().nonnegative(),
+      output: z.number().int().nonnegative(),
+    }).strict(),
+    currency: z.string(),
+    phase: z.string(),
+  }).strict()
 
   return {
     key: 'queryTideCost',
-    schema: z.object({
-      models: z.array(z.string()),
-      cost: z.number().nonnegative(),
-      costByModel: z.record(z.string(), z.number().nonnegative()),
-      tokens: z.object({
-        uncachedInput: z.number().int().nonnegative(),
-        cacheRead: z.number().int().nonnegative(),
-        cacheWrite: z.number().int().nonnegative(),
-        output: z.number().int().nonnegative(),
-      }).strict(),
-      currency: z.string(),
-      phase: z.string(),
-    }).strict(),
+    stateVersion: 1,
+    stateSchema,
     init: () => ({ currentModel: null, last: null, byModel: emptyByModel(), modelOrder: [] }),
     apply: (state, event) => {
       let nextModel = state.currentModel
@@ -321,7 +349,9 @@ export const makeCostProjection = (config) => {
         modelOrder: isNewModel ? [...state.modelOrder, model] : state.modelOrder,
       }
     },
-    view: (state) => {
+    wire: {
+      viewSchema,
+      view: (state) => {
       const phase = computeTide(Date.now(), { cutoff, peakWindows: config.peakWindows }).phase
       const tokens = { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
       const costByModel = {}
@@ -355,7 +385,7 @@ export const makeCostProjection = (config) => {
         phase,
       }
     },
-    stateVersion: 1,
+    },
   }
 }
 
